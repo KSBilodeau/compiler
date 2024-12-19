@@ -2,9 +2,31 @@ use std::io;
 use std::io::Write;
 
 #[derive(Debug)]
+enum Operation {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+impl TryFrom<char> for Operation {
+    type Error = String;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            '+' => Ok(Operation::Add),
+            '-' => Ok(Operation::Sub),
+            '*' => Ok(Operation::Mul),
+            '/' => Ok(Operation::Div),
+            _ => Err(format!("{} IS AN UNDEFINED OPERATION", value))
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Input {
     term_ranges: Vec<(usize, usize)>,
-    op_offsets: Vec<usize>,
+    op_offsets: Vec<Operation>,
 }
 
 pub fn demarcate(input: &str) -> Input {
@@ -12,8 +34,6 @@ pub fn demarcate(input: &str) -> Input {
 
     let mut term_ranges = Vec::new();
     let mut op_offsets = Vec::new();
-
-    let ops = vec!['+', '-', '/', '*'];
 
     while let Some((start_idx, char)) = char_stream.next() {
         if char.is_numeric() {
@@ -23,9 +43,9 @@ pub fn demarcate(input: &str) -> Input {
                 offset += 1;
             }
 
-            term_ranges.push((start_idx, start_idx + offset));
-        } else if ops.contains(&char) {
-            op_offsets.push(start_idx);
+            term_ranges.push((start_idx, start_idx + offset + 1));
+        } else if let Ok(op) = Operation::try_from(char) {
+            op_offsets.push(op);
         }
     }
 
@@ -47,18 +67,17 @@ pub fn parse(input: &str) -> isize {
     let mut op_stream = demarcated_input.op_offsets.iter();
 
     let term = term_stream.next().unwrap();
-    let result = &mut input[term.0..=term.1].parse::<isize>().unwrap();
+    let result = &mut input[term.0..term.1].parse::<isize>().unwrap();
 
     while let Some(term) = term_stream.next() {
-        let term = &mut input[term.0..=term.1].parse::<isize>().unwrap();
-        let op_offset = *op_stream.next().unwrap();
+        let term = &mut input[term.0..term.1].parse::<isize>().unwrap();
+        let operation = op_stream.next().unwrap();
 
-        match &input[op_offset..=op_offset] {
-            "+" => *result += *term,
-            "-" => *result -= *term,
-            "*" => *result *= *term,
-            "/" => *result /= *term,
-            _ => unreachable!(),
+        match operation {
+            Operation::Add => *result += *term,
+            Operation::Sub => *result -= *term,
+            Operation::Mul => *result *= *term,
+            Operation::Div => *result /= *term,
         }
     }
 
