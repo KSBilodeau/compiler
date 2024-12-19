@@ -1,108 +1,71 @@
 use std::io;
 use std::io::Write;
-use lyn::Scanner;
 
-pub enum Calc {
-    Expr {
-        lhs: usize,
-        op: Operation,
-        rhs: Box<Calc>,
-    },
-    Number(usize)
+#[derive(Debug)]
+pub struct Input {
+    term_ranges: Vec<(usize, usize)>,
+    op_offsets: Vec<usize>,
 }
 
-pub enum Operation {
-    Add,
-    Sub,
-    Div,
-    Mul,
-}
+pub fn demarcate(input: &str) -> Input {
+    let mut char_stream = input.chars().enumerate().peekable();
 
-pub fn expr(state: &mut Scanner) -> Calc {
-    let term = number(state);
+    let mut term_ranges = Vec::new();
+    let mut op_offsets = Vec::new();
 
-    if state.is_done() {
-        Calc::Number(term)
-    } else {
-        Calc::Expr {
-            lhs: term,
-            op: operation(state),
-            rhs: Box::new(expr(state)),
-        }
-    }
-}
+    let ops = vec!['+', '-', '/', '*'];
 
-pub fn number(state: &mut Scanner) -> usize {
-    let mut num_str = String::new();
-
-    loop {
-        num_str.push(*state.pop().unwrap());
-
-        if state.is_done() || !state.peek().unwrap().is_numeric() {
-            break;
-        }
-    }
-
-    num_str.parse().unwrap()
-}
-
-pub fn operation(state: &mut Scanner) -> Operation {
-    state.transform(|char| match char {
-        '+' => Some(Operation::Add),
-        '-' => Some(Operation::Sub),
-        '*' => Some(Operation::Mul),
-        '/' => Some(Operation::Div),
-        _ => None,
-    }).unwrap()
-}
-
-pub fn parse(input: &str) -> usize {
-    let mut state = Scanner::new(input.trim());
-
-    let mut result;
-    let mut next_op;
-    let mut next_expr = expr(&mut state);
-
-    match next_expr {
-        Calc::Expr { lhs, rhs, op } => {
-            result = lhs;
-            next_op = op;
-            next_expr = *rhs;
-        }
-        Calc::Number(num) => return num,
-    }
-
-    loop {
-        match next_expr {
-            Calc::Expr { lhs, rhs, op} => {
-                match next_op {
-                    Operation::Add => result += lhs,
-                    Operation::Sub => result -= lhs,
-                    Operation::Div => result /= lhs,
-                    Operation::Mul => result *= lhs,
-                }
-
-                next_op = op;
-                next_expr = *rhs;
+    while let Some((start_idx, char)) = char_stream.next() {
+        if char.is_numeric() {
+            let mut offset = 0usize;
+            while char_stream.peek().is_some_and(|x| x.1.is_numeric()) {
+                char_stream.next();
+                offset += 1;
             }
-            Calc::Number(num) => {
-                match next_op {
-                    Operation::Add => result += num,
-                    Operation::Sub => result -= num,
-                    Operation::Div => result /= num,
-                    Operation::Mul => result *= num,
-                }
 
-                break
-            }
+            term_ranges.push((start_idx, start_idx + offset));
+        } else if ops.contains(&char) {
+            op_offsets.push(start_idx);
         }
     }
 
-    result
+    Input {
+        term_ranges,
+        op_offsets,
+    }
+}
+
+pub fn parse(input: &str) -> isize {
+    let demarcated_input = demarcate(input);
+
+    if demarcated_input.term_ranges.len() == 0 {
+        println!("NO VALID INPUT PROVIDED");
+        return isize::MIN;
+    }
+
+    let mut term_stream = demarcated_input.term_ranges.iter().peekable();
+    let mut op_stream = demarcated_input.op_offsets.iter();
+
+    let term = term_stream.next().unwrap();
+    let result = &mut input[term.0..=term.1].parse::<isize>().unwrap();
+
+    while let Some(term) = term_stream.next() {
+        let term = &mut input[term.0..=term.1].parse::<isize>().unwrap();
+        let op_offset = *op_stream.next().unwrap();
+
+        match &input[op_offset..=op_offset] {
+            "+" => *result += *term,
+            "-" => *result -= *term,
+            "*" => *result *= *term,
+            "/" => *result /= *term,
+            _ => unreachable!(),
+        }
+    }
+
+    *result
 }
 
 fn main() {
-
     loop {
         print!("Please enter a string: ");
         io::stdout().flush().unwrap();
