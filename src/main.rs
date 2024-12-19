@@ -24,16 +24,22 @@ impl TryFrom<char> for Operation {
 }
 
 #[derive(Debug)]
-pub struct Input {
-    term_ranges: Vec<(usize, usize)>,
-    op_offsets: Vec<Operation>,
+struct Term<'a> {
+    content: &'a str,
+    _span: std::ops::Range<usize>,
+}
+
+#[derive(Debug)]
+pub struct Input<'a> {
+    term_ranges: Vec<Term<'a>>,
+    operations: Vec<Operation>,
 }
 
 pub fn demarcate(input: &str) -> Input {
     let mut char_stream = input.chars().enumerate().peekable();
 
     let mut term_ranges = Vec::new();
-    let mut op_offsets = Vec::new();
+    let mut operations = Vec::new();
 
     while let Some((start_idx, char)) = char_stream.next() {
         if char.is_numeric() {
@@ -43,15 +49,18 @@ pub fn demarcate(input: &str) -> Input {
                 offset += 1;
             }
 
-            term_ranges.push((start_idx, start_idx + offset + 1));
+            term_ranges.push(Term {
+                content: &input[start_idx..start_idx + offset + 1],
+                _span: start_idx..(start_idx + offset + 1)
+            });
         } else if let Ok(op) = Operation::try_from(char) {
-            op_offsets.push(op);
+            operations.push(op);
         }
     }
 
     Input {
         term_ranges,
-        op_offsets,
+        operations,
     }
 }
 
@@ -64,24 +73,24 @@ pub fn parse(input: &str) -> isize {
     }
 
     let mut term_stream = demarcated_input.term_ranges.iter().peekable();
-    let mut op_stream = demarcated_input.op_offsets.iter();
+    let mut op_stream = demarcated_input.operations.iter();
 
-    let term = term_stream.next().unwrap();
-    let result = &mut input[term.0..term.1].parse::<isize>().unwrap();
+    let term = term_stream.next().unwrap().content;
+    let mut result = term.parse::<isize>().unwrap();
 
-    while let Some(term) = term_stream.next() {
-        let term = &mut input[term.0..term.1].parse::<isize>().unwrap();
+    while let Some(&ref term) = term_stream.next() {
+        let term = term.content.parse::<isize>().unwrap();
         let operation = op_stream.next().unwrap();
 
         match operation {
-            Operation::Add => *result += *term,
-            Operation::Sub => *result -= *term,
-            Operation::Mul => *result *= *term,
-            Operation::Div => *result /= *term,
+            Operation::Add => result += term,
+            Operation::Sub => result -= term,
+            Operation::Mul => result *= term,
+            Operation::Div => result /= term,
         }
     }
 
-    *result
+    result
 }
 
 fn main() {
